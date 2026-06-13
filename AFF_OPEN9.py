@@ -20,10 +20,10 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.sidebar.header("Upload File")
-meta_file = st.sidebar.file_uploader("Meta Ads CSV", type=["csv"])
-tiktok_file = st.sidebar.file_uploader("TikTok Ads", type=["csv", "xlsx"]) 
-click_file = st.sidebar.file_uploader("Shopee Click Report CSV", type=["csv"])
-commission_file = st.sidebar.file_uploader("Shopee Commission CSV", type=["csv"])
+meta_file = st.sidebar.file_uploader("Meta Ads CSV (Opsional)", type=["csv"])
+tiktok_file = st.sidebar.file_uploader("TikTok Ads (Opsional)", type=["csv", "xlsx"]) 
+click_file = st.sidebar.file_uploader("Shopee Click Report CSV (Wajib)", type=["csv"])
+commission_file = st.sidebar.file_uploader("Shopee Commission CSV (Wajib)", type=["csv"])
 
 st.markdown("### 📊 Laporan Harian", unsafe_allow_html=True)
 st.write("---")
@@ -51,13 +51,13 @@ def clean_number(series):
 def clean_campaign_name(series):
     return series.astype(str).str.lower().str.replace(r'[^a-z0-9]', '', regex=True)
 
-if meta_file and tiktok_file and click_file and commission_file:
-    meta = pd.read_csv(meta_file)
-    tiktok = pd.read_csv(tiktok_file) if tiktok_file.name.endswith('.csv') else pd.read_excel(tiktok_file)
+# MODIFIKASI: Cukup minimal 1 file iklan (Meta ATAU TikTok) DAN ke-2 file Shopee
+if (meta_file or tiktok_file) and click_file and commission_file:
+    
     clicks = pd.read_csv(click_file)
     commission = pd.read_csv(commission_file)
     
-    st.sidebar.success("Semua file berhasil dimuat!")
+    st.sidebar.success("File berhasil dimuat!")
 
     # --- KONFIGURASI KOLOM ---
     META_CAMP_COL = 'Nama iklan'
@@ -75,37 +75,44 @@ if meta_file and tiktok_file and click_file and commission_file:
     # -------------------------
 
     try:
-        # PENTING: Hapus baris rekapitulasi "Total" dari file Iklan agar tidak dihitung ganda
-        tiktok = tiktok[~tiktok[TT_CAMP_COL].astype(str).str.contains('Total', case=False, na=False)]
-        meta = meta[~meta[META_CAMP_COL].astype(str).str.contains('Total', case=False, na=False)]
+        ad_dfs = [] # List untuk menampung data iklan yang diupload
 
-        # Bersihkan format angka
-        meta[META_SPEND_COL] = clean_number(meta[META_SPEND_COL])
-        meta[META_CLICK_COL] = clean_number(meta[META_CLICK_COL])
-        tiktok[TT_SPEND_COL] = clean_number(tiktok[TT_SPEND_COL])
-        tiktok[TT_CLICK_COL] = clean_number(tiktok[TT_CLICK_COL])
-        commission[SHP_COMM_ITEM_COL] = clean_number(commission[SHP_COMM_ITEM_COL])
-        commission[SHP_COMM_TOTAL_COL] = clean_number(commission[SHP_COMM_TOTAL_COL])
+        # === PROSES META JIKA DIUPLOAD ===
+        if meta_file:
+            meta = pd.read_csv(meta_file)
+            meta = meta[~meta[META_CAMP_COL].astype(str).str.contains('Total', case=False, na=False)]
+            meta[META_SPEND_COL] = clean_number(meta[META_SPEND_COL])
+            meta[META_CLICK_COL] = clean_number(meta[META_CLICK_COL])
+            meta['SYNC_KEY'] = clean_campaign_name(meta[META_CAMP_COL])
+            
+            meta_agg = meta.groupby('SYNC_KEY').agg({META_CAMP_COL: 'first', META_SPEND_COL: 'sum', META_CLICK_COL: 'sum'}).reset_index()
+            meta_agg.rename(columns={META_CAMP_COL: 'NAMA KAMPANYE', META_SPEND_COL: 'SPEND ADS', META_CLICK_COL: 'KLIK ADS'}, inplace=True)
+            meta_agg['PLATFORM'] = 'Meta Ads'
+            ad_dfs.append(meta_agg)
 
-        # Buat SYNC_KEY
-        meta['SYNC_KEY'] = clean_campaign_name(meta[META_CAMP_COL])
-        tiktok['SYNC_KEY'] = clean_campaign_name(tiktok[TT_CAMP_COL])
-        clicks['SYNC_KEY'] = clean_campaign_name(clicks[SHP_CLICK_TAG_COL])
-        commission['SYNC_KEY'] = clean_campaign_name(commission[SHP_COMM_TAG_COL])
+        # === PROSES TIKTOK JIKA DIUPLOAD ===
+        if tiktok_file:
+            tiktok = pd.read_csv(tiktok_file) if tiktok_file.name.endswith('.csv') else pd.read_excel(tiktok_file)
+            tiktok = tiktok[~tiktok[TT_CAMP_COL].astype(str).str.contains('Total', case=False, na=False)]
+            tiktok[TT_SPEND_COL] = clean_number(tiktok[TT_SPEND_COL])
+            tiktok[TT_CLICK_COL] = clean_number(tiktok[TT_CLICK_COL])
+            tiktok['SYNC_KEY'] = clean_campaign_name(tiktok[TT_CAMP_COL])
+            
+            tiktok_agg = tiktok.groupby('SYNC_KEY').agg({TT_CAMP_COL: 'first', TT_SPEND_COL: 'sum', TT_CLICK_COL: 'sum'}).reset_index()
+            tiktok_agg.rename(columns={TT_CAMP_COL: 'NAMA KAMPANYE', TT_SPEND_COL: 'SPEND ADS', TT_CLICK_COL: 'KLIK ADS'}, inplace=True)
+            tiktok_agg['PLATFORM'] = 'TikTok Ads'
+            ad_dfs.append(tiktok_agg)
 
-        # Agregasi Iklan
-        meta_agg = meta.groupby('SYNC_KEY').agg({META_CAMP_COL: 'first', META_SPEND_COL: 'sum', META_CLICK_COL: 'sum'}).reset_index()
-        meta_agg.rename(columns={META_CAMP_COL: 'NAMA KAMPANYE', META_SPEND_COL: 'SPEND ADS', META_CLICK_COL: 'KLIK ADS'}, inplace=True)
-        meta_agg['PLATFORM'] = 'Meta Ads'
-
-        tiktok_agg = tiktok.groupby('SYNC_KEY').agg({TT_CAMP_COL: 'first', TT_SPEND_COL: 'sum', TT_CLICK_COL: 'sum'}).reset_index()
-        tiktok_agg.rename(columns={TT_CAMP_COL: 'NAMA KAMPANYE', TT_SPEND_COL: 'SPEND ADS', TT_CLICK_COL: 'KLIK ADS'}, inplace=True)
-        tiktok_agg['PLATFORM'] = 'TikTok Ads'
-
-        df_ads = pd.concat([meta_agg, tiktok_agg], ignore_index=True)
+        # Gabungkan data Iklan yang tersedia
+        df_ads = pd.concat(ad_dfs, ignore_index=True)
         df_ads = df_ads.groupby('SYNC_KEY').agg({'NAMA KAMPANYE': 'first', 'PLATFORM': 'first', 'SPEND ADS': 'sum', 'KLIK ADS': 'sum'}).reset_index()
 
         # Agregasi Shopee
+        commission[SHP_COMM_ITEM_COL] = clean_number(commission[SHP_COMM_ITEM_COL])
+        commission[SHP_COMM_TOTAL_COL] = clean_number(commission[SHP_COMM_TOTAL_COL])
+        clicks['SYNC_KEY'] = clean_campaign_name(clicks[SHP_CLICK_TAG_COL])
+        commission['SYNC_KEY'] = clean_campaign_name(commission[SHP_COMM_TAG_COL])
+
         clicks_agg = clicks.groupby('SYNC_KEY').size().reset_index(name='KLIK SHOPEE')
         
         # Hanya menghitung "Jumlah" (Total Penjualan) jika komisinya lebih dari 0
@@ -132,7 +139,7 @@ if meta_file and tiktok_file and click_file and commission_file:
         df_final.loc[mask_empty_name, 'NAMA KAMPANYE'] = df_final.loc[mask_empty_name, 'SYNC_KEY'].apply(lambda x: f"{str(x)}")
         
         mask_empty_platform = df_final['PLATFORM'].isna()
-        df_final.loc[mask_empty_platform, 'PLATFORM'] = 'Lainnya'
+        df_final.loc[mask_empty_platform, 'PLATFORM'] = 'Organik / Lainnya'
         
         # Pastikan NAMA KAMPANYE memiliki tanda pagar (#)
         df_final['TAG'] = df_final['NAMA KAMPANYE'].apply(lambda x: x if str(x).startswith('#') else f"#{x}")
@@ -227,4 +234,4 @@ if meta_file and tiktok_file and click_file and commission_file:
         st.code(traceback.format_exc())
 
 else:
-    st.info("👈 Silakan upload 4 file laporan di panel sebelah kiri untuk melihat Dashboard.")
+    st.info("👈 Silakan upload minimal 1 file Ads (Meta/TikTok) DAN ke-2 file Shopee di panel kiri.")
