@@ -5,7 +5,7 @@ import re
 import numpy as np
 
 # Setup Halaman
-st.set_page_config(page_title="BRINDEL AFF", layout="wide")
+st.set_page_config(page_title="Dashboard Affiliate Open9", layout="wide")
 
 # CSS Kustom
 st.markdown("""
@@ -51,23 +51,36 @@ def clean_number(series):
 def clean_campaign_name(series):
     return series.astype(str).str.lower().str.replace(r'[^a-z0-9]', '', regex=True)
 
-# MODIFIKASI: Cukup minimal 1 file iklan (Meta ATAU TikTok) DAN ke-2 file Shopee
+# 3. FUNGSI UNTUK MENDETEKSI NAMA KOLOM SECARA OTOMATIS (INDONESIA / INGGRIS)
+def find_column(df, possibilities):
+    for p in possibilities:
+        match = [col for col in df.columns if col.strip().lower() == p.strip().lower()]
+        if match:
+            return match[0]
+    return None
+
+# 4. FUNGSI UNTUK MEMBACA CSV DENGAN AUTO-DETEKSI SEPARATOR (, atau ;)
+def safe_read_csv(file_buffer):
+    file_buffer.seek(0)
+    try:
+        df = pd.read_csv(file_buffer)
+        if len(df.columns) <= 1:
+            file_buffer.seek(0)
+            df = pd.read_csv(file_buffer, sep=';')
+    except:
+        file_buffer.seek(0)
+        df = pd.read_csv(file_buffer, sep=';')
+    return df
+
+# LOGIKA UTAMA
 if (meta_file or tiktok_file) and click_file and commission_file:
     
-    clicks = pd.read_csv(click_file)
-    commission = pd.read_csv(commission_file)
+    clicks = safe_read_csv(click_file)
+    commission = safe_read_csv(commission_file)
     
     st.sidebar.success("File berhasil dimuat!")
 
-    # --- KONFIGURASI KOLOM ---
-    META_CAMP_COL = 'Nama iklan'
-    META_SPEND_COL = 'Jumlah yang dibelanjakan (IDR)'
-    META_CLICK_COL = 'Klik tautan'
-    
-    TT_CAMP_COL = 'Ad name'
-    TT_SPEND_COL = 'Cost'
-    TT_CLICK_COL = 'Clicks (destination)'
-    
+    # --- KONFIGURASI KOLOM SHOPEE ---
     SHP_CLICK_TAG_COL = 'Tag_link'
     SHP_COMM_TAG_COL = 'Tag_link1'
     SHP_COMM_ITEM_COL = 'Jumlah'
@@ -79,33 +92,80 @@ if (meta_file or tiktok_file) and click_file and commission_file:
 
         # === PROSES META JIKA DIUPLOAD ===
         if meta_file:
-            meta = pd.read_csv(meta_file)
-            meta = meta[~meta[META_CAMP_COL].astype(str).str.contains('Total', case=False, na=False)]
-            meta[META_SPEND_COL] = clean_number(meta[META_SPEND_COL])
-            meta[META_CLICK_COL] = clean_number(meta[META_CLICK_COL])
-            meta['SYNC_KEY'] = clean_campaign_name(meta[META_CAMP_COL])
+            meta = safe_read_csv(meta_file)
             
-            meta_agg = meta.groupby('SYNC_KEY').agg({META_CAMP_COL: 'first', META_SPEND_COL: 'sum', META_CLICK_COL: 'sum'}).reset_index()
-            meta_agg.rename(columns={META_CAMP_COL: 'NAMA KAMPANYE', META_SPEND_COL: 'SPEND ADS', META_CLICK_COL: 'KLIK ADS'}, inplace=True)
-            meta_agg['PLATFORM'] = 'Meta Ads'
-            ad_dfs.append(meta_agg)
+            META_CAMP_COL = find_column(meta, ['Nama iklan', 'Ad name', 'Campaign name', 'Nama kampanye'])
+            META_SPEND_COL = find_column(meta, ['Jumlah yang dibelanjakan (IDR)', 'Amount spent (IDR)', 'Amount spent', 'Spend'])
+            META_CLICK_COL = find_column(meta, ['Klik tautan', 'Link clicks', 'Clicks'])
+            
+            if not META_CAMP_COL or not META_SPEND_COL:
+                st.error("❌ Kolom nama iklan atau total spend tidak ditemukan di file Meta Ads. Periksa header file Anda.")
+            else:
+                meta = meta[~meta[META_CAMP_COL].astype(str).str.contains('Total', case=False, na=False)]
+                meta[META_SPEND_COL] = clean_number(meta[META_SPEND_COL])
+                
+                # Handling jika kolom klik tidak ada
+                if META_CLICK_COL:
+                    meta[META_CLICK_COL] = clean_number(meta[META_CLICK_COL])
+                else:
+                    meta['KLIK_DUMMY'] = 0
+                    META_CLICK_COL = 'KLIK_DUMMY'
+                    
+                meta['SYNC_KEY'] = clean_campaign_name(meta[META_CAMP_COL])
+                
+                meta_agg = meta.groupby('SYNC_KEY').agg({
+                    META_CAMP_COL: 'first', 
+                    META_SPEND_COL: 'sum', 
+                    META_CLICK_COL: 'sum'
+                }).reset_index()
+                
+                meta_agg.rename(columns={META_CAMP_COL: 'NAMA KAMPANYE', META_SPEND_COL: 'SPEND ADS', META_CLICK_COL: 'KLIK ADS'}, inplace=True)
+                meta_agg['PLATFORM'] = 'Meta Ads'
+                ad_dfs.append(meta_agg)
 
         # === PROSES TIKTOK JIKA DIUPLOAD ===
         if tiktok_file:
-            tiktok = pd.read_csv(tiktok_file) if tiktok_file.name.endswith('.csv') else pd.read_excel(tiktok_file)
-            tiktok = tiktok[~tiktok[TT_CAMP_COL].astype(str).str.contains('Total', case=False, na=False)]
-            tiktok[TT_SPEND_COL] = clean_number(tiktok[TT_SPEND_COL])
-            tiktok[TT_CLICK_COL] = clean_number(tiktok[TT_CLICK_COL])
-            tiktok['SYNC_KEY'] = clean_campaign_name(tiktok[TT_CAMP_COL])
+            if tiktok_file.name.endswith('.csv'):
+                tiktok = safe_read_csv(tiktok_file)
+            else:
+                tiktok = pd.read_excel(tiktok_file)
+                
+            TT_CAMP_COL = find_column(tiktok, ['Ad name', 'Nama iklan', 'Campaign name', 'Nama kampanye'])
+            TT_SPEND_COL = find_column(tiktok, ['Cost', 'Biaya', 'Spend'])
+            TT_CLICK_COL = find_column(tiktok, ['Clicks (destination)', 'Clicks', 'Klik', 'Klik (tujuan)'])
             
-            tiktok_agg = tiktok.groupby('SYNC_KEY').agg({TT_CAMP_COL: 'first', TT_SPEND_COL: 'sum', TT_CLICK_COL: 'sum'}).reset_index()
-            tiktok_agg.rename(columns={TT_CAMP_COL: 'NAMA KAMPANYE', TT_SPEND_COL: 'SPEND ADS', TT_CLICK_COL: 'KLIK ADS'}, inplace=True)
-            tiktok_agg['PLATFORM'] = 'TikTok Ads'
-            ad_dfs.append(tiktok_agg)
+            if not TT_CAMP_COL or not TT_SPEND_COL:
+                st.error("❌ Kolom nama iklan atau cost tidak ditemukan di file TikTok Ads.")
+            else:
+                tiktok = tiktok[~tiktok[TT_CAMP_COL].astype(str).str.contains('Total', case=False, na=False)]
+                tiktok[TT_SPEND_COL] = clean_number(tiktok[TT_SPEND_COL])
+                
+                # Handling jika kolom klik tidak ada
+                if TT_CLICK_COL:
+                    tiktok[TT_CLICK_COL] = clean_number(tiktok[TT_CLICK_COL])
+                else:
+                    tiktok['KLIK_DUMMY'] = 0
+                    TT_CLICK_COL = 'KLIK_DUMMY'
+
+                tiktok['SYNC_KEY'] = clean_campaign_name(tiktok[TT_CAMP_COL])
+                
+                tiktok_agg = tiktok.groupby('SYNC_KEY').agg({
+                    TT_CAMP_COL: 'first', 
+                    TT_SPEND_COL: 'sum', 
+                    TT_CLICK_COL: 'sum'
+                }).reset_index()
+                
+                tiktok_agg.rename(columns={TT_CAMP_COL: 'NAMA KAMPANYE', TT_SPEND_COL: 'SPEND ADS', TT_CLICK_COL: 'KLIK ADS'}, inplace=True)
+                tiktok_agg['PLATFORM'] = 'TikTok Ads'
+                ad_dfs.append(tiktok_agg)
 
         # Gabungkan data Iklan yang tersedia
-        df_ads = pd.concat(ad_dfs, ignore_index=True)
-        df_ads = df_ads.groupby('SYNC_KEY').agg({'NAMA KAMPANYE': 'first', 'PLATFORM': 'first', 'SPEND ADS': 'sum', 'KLIK ADS': 'sum'}).reset_index()
+        if ad_dfs:
+            df_ads = pd.concat(ad_dfs, ignore_index=True)
+            df_ads = df_ads.groupby('SYNC_KEY').agg({'NAMA KAMPANYE': 'first', 'PLATFORM': 'first', 'SPEND ADS': 'sum', 'KLIK ADS': 'sum'}).reset_index()
+        else:
+            # Fallback jika ternyata list kosong
+            df_ads = pd.DataFrame(columns=['SYNC_KEY', 'NAMA KAMPANYE', 'PLATFORM', 'SPEND ADS', 'KLIK ADS'])
 
         # Agregasi Shopee
         commission[SHP_COMM_ITEM_COL] = clean_number(commission[SHP_COMM_ITEM_COL])
@@ -126,13 +186,16 @@ if (meta_file or tiktok_file) and click_file and commission_file:
         comm_agg = pd.merge(comm_agg_komisi, comm_agg_item, on='SYNC_KEY', how='left')
 
         # Base merge semua data
-        all_sync_keys = pd.DataFrame({'SYNC_KEY': pd.concat([df_ads['SYNC_KEY'], clicks_agg['SYNC_KEY'], comm_agg['SYNC_KEY']]).unique()})
+        all_sync_keys = pd.DataFrame({'SYNC_KEY': pd.concat([df_ads['SYNC_KEY'], clicks_agg['SYNC_KEY'], comm_agg['SYNC_KEY']]).dropna().unique()})
         df_final = pd.merge(all_sync_keys, df_ads, on='SYNC_KEY', how='left')
         df_final = pd.merge(df_final, clicks_agg, on='SYNC_KEY', how='left')
         df_final = pd.merge(df_final, comm_agg, on='SYNC_KEY', how='left')
         
         # Pengisian Data Kosong
         kolom_angka = ['SPEND ADS', 'KLIK ADS', 'KLIK SHOPEE', 'TOTAL PENJUALAN', 'KOMISI']
+        for col in kolom_angka:
+            if col not in df_final.columns:
+                df_final[col] = 0
         df_final[kolom_angka] = df_final[kolom_angka].fillna(0)
 
         mask_empty_name = df_final['NAMA KAMPANYE'].isna()
@@ -224,7 +287,10 @@ if (meta_file or tiktok_file) and click_file and commission_file:
             colA, colB = st.columns(2)
             with colA:
                 st.write("**Tag di Data Iklan (Ads):**")
-                st.write(df_ads['SYNC_KEY'].unique())
+                if not df_ads.empty:
+                    st.write(df_ads['SYNC_KEY'].unique())
+                else:
+                    st.write("Belum ada data iklan.")
             with colB:
                 st.write("**Tag di Laporan Shopee:**")
                 st.write(pd.concat([clicks['SYNC_KEY'], commission['SYNC_KEY']]).dropna().unique())
