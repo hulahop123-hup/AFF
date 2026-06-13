@@ -5,7 +5,7 @@ import re
 import numpy as np
 
 # Setup Halaman
-st.set_page_config(page_title="Dashboard Affiliate Open9", layout="wide")
+st.set_page_config(page_title="BRINDEL AFF", layout="wide")
 
 # CSS Kustom
 st.markdown("""
