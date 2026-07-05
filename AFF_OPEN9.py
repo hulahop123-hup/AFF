@@ -144,7 +144,8 @@ if (meta_files or tiktok_files) and click_files and commission_files:
                 
             TT_CAMP_COL = find_column(tiktok, ['Ad group name', 'Ad name', 'Nama iklan', 'Campaign name', 'Nama kampanye'])
             TT_SPEND_COL = find_column(tiktok, ['Cost', 'Biaya', 'Spend'])
-            TT_CLICK_COL = find_column(tiktok, ['Clicks (destination)', 'Clicks', 'Klik', 'Klik (tujuan)'])
+            # PERBAIKAN: Penambahan 'Klik (destinasi)' pada list kemungkinan kolom klik
+            TT_CLICK_COL = find_column(tiktok, ['Klik (destinasi)', 'Clicks (destination)', 'Clicks', 'Klik', 'Klik (tujuan)'])
             
             if not TT_CAMP_COL or not TT_SPEND_COL:
                 st.error("❌ Kolom nama grup iklan (Ad group name) atau Cost tidak ditemukan di file TikTok Ads.")
