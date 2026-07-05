@@ -114,9 +114,8 @@ if (meta_files or tiktok_files) and click_files and commission_files:
             if not META_CAMP_COL or not META_SPEND_COL:
                 st.error("❌ Kolom nama iklan atau total spend tidak ditemukan di file Meta Ads. Periksa header file Anda.")
             else:
-                # FILTERING EKSTRA UNTUK MENCEGAH DOUBLE COUNT
                 meta = meta[~meta[META_CAMP_COL].astype(str).str.contains('Total|Jumlah', case=False, na=False)]
-                meta = meta[meta[META_CAMP_COL].astype(str).str.strip() != '-'] # Buang baris rekap "-"
+                meta = meta[meta[META_CAMP_COL].astype(str).str.strip() != '-'] 
                 
                 meta[META_SPEND_COL] = clean_number(meta[META_SPEND_COL])
                 if META_CLICK_COL:
@@ -126,7 +125,7 @@ if (meta_files or tiktok_files) and click_files and commission_files:
                     META_CLICK_COL = 'KLIK_DUMMY'
                     
                 meta['SYNC_KEY'] = clean_campaign_name(meta[META_CAMP_COL])
-                meta = meta[meta['SYNC_KEY'] != ''] # Buang jika nama kampanye tidak valid/kosong
+                meta = meta[meta['SYNC_KEY'] != ''] 
                 
                 meta_agg = meta.groupby('SYNC_KEY').agg({
                     META_CAMP_COL: 'first', 
@@ -142,17 +141,24 @@ if (meta_files or tiktok_files) and click_files and commission_files:
         if tiktok_files:
             tiktok = read_multiple_files(tiktok_files)
                 
-            TT_CAMP_COL = find_column(tiktok, ['Ad group name', 'Ad name', 'Nama iklan', 'Campaign name', 'Nama kampanye'])
+            # PERBAIKAN: Deteksi kombinasi pintar untuk mengatasi beda format 'Nama Iklan' vs 'Nama Grup Iklan'
+            camp_cols = [c for c in tiktok.columns if c.strip().lower() in ['nama iklan', 'nama grup iklan', 'ad group name', 'ad name', 'campaign name', 'nama kampanye']]
+            if camp_cols:
+                tiktok['NAMA_KAMPANYE_GABUNGAN'] = tiktok[camp_cols[0]]
+                for col in camp_cols[1:]:
+                    tiktok['NAMA_KAMPANYE_GABUNGAN'] = tiktok['NAMA_KAMPANYE_GABUNGAN'].fillna(tiktok[col])
+                TT_CAMP_COL = 'NAMA_KAMPANYE_GABUNGAN'
+            else:
+                TT_CAMP_COL = None
+                
             TT_SPEND_COL = find_column(tiktok, ['Cost', 'Biaya', 'Spend'])
-            # PERBAIKAN: Penambahan 'Klik (destinasi)' pada list kemungkinan kolom klik
             TT_CLICK_COL = find_column(tiktok, ['Klik (destinasi)', 'Clicks (destination)', 'Clicks', 'Klik', 'Klik (tujuan)'])
             
             if not TT_CAMP_COL or not TT_SPEND_COL:
-                st.error("❌ Kolom nama grup iklan (Ad group name) atau Cost tidak ditemukan di file TikTok Ads.")
+                st.error("❌ Kolom nama iklan/grup iklan atau Biaya tidak ditemukan di file TikTok Ads.")
             else:
-                # FILTERING EKSTRA UNTUK MENCEGAH DOUBLE COUNT
                 tiktok = tiktok[~tiktok[TT_CAMP_COL].astype(str).str.contains('Total|Jumlah', case=False, na=False)]
-                tiktok = tiktok[tiktok[TT_CAMP_COL].astype(str).str.strip() != '-'] # Buang baris rekap "-"
+                tiktok = tiktok[tiktok[TT_CAMP_COL].astype(str).str.strip() != '-'] 
                 
                 tiktok[TT_SPEND_COL] = clean_number(tiktok[TT_SPEND_COL])
                 if TT_CLICK_COL:
@@ -162,7 +168,7 @@ if (meta_files or tiktok_files) and click_files and commission_files:
                     TT_CLICK_COL = 'KLIK_DUMMY'
 
                 tiktok['SYNC_KEY'] = clean_campaign_name(tiktok[TT_CAMP_COL])
-                tiktok = tiktok[tiktok['SYNC_KEY'] != ''] # Buang jika nama kampanye tidak valid/kosong
+                tiktok = tiktok[tiktok['SYNC_KEY'] != ''] 
                 
                 tiktok_agg = tiktok.groupby('SYNC_KEY').agg({
                     TT_CAMP_COL: 'first', 
