@@ -151,7 +151,7 @@ if (meta_files or tiktok_files) and click_files and commission_files:
             else:
                 TT_CAMP_COL = None
                 
-            TT_SPEND_COL = find_column(tiktok, ['Cost', 'Biaya', 'Spend'])
+            TT_SPEND_COL = find_column(tiktok, ['Cost', 'Biaya', 'Spend', 'Belanja'])
             TT_CLICK_COL = find_column(tiktok, ['Klik (destinasi)', 'Clicks (destination)', 'Clicks', 'Klik', 'Klik (tujuan)'])
             
             if not TT_CAMP_COL or not TT_SPEND_COL:
