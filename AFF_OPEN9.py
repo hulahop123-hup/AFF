@@ -94,12 +94,17 @@ if (meta_files or tiktok_files) and click_files and commission_files:
     st.sidebar.success("Semua file berhasil dimuat & digabungkan!")
 
     # --- KONFIGURASI KOLOM SHOPEE ---
-    SHP_CLICK_TAG_COL = 'Tag_link'
-    SHP_COMM_TAG_COL = 'Tag_link1'
-    SHP_COMM_ITEM_COL = 'Pesanan'
-    SHP_COMM_TOTAL_COL = 'Komisi Bersih Affiliate (Rp)'
+    # Menggunakan find_column agar kebal terhadap perubahan nama kolom dari Shopee
+    SHP_CLICK_TAG_COL = find_column(clicks, ['Tag_link', 'Tag Link', 'Sub ID', 'Sub_id'])
+    SHP_COMM_TAG_COL = find_column(commission, ['Tag_link1', 'Tag Link', 'Sub ID', 'Sub_id', 'Tag_link'])
+    SHP_COMM_ITEM_COL = find_column(commission, ['Jumlah', 'Pesanan', 'Orders', 'Item Terjual', 'Jumlah Pesanan'])
+    SHP_COMM_TOTAL_COL = find_column(commission, ['Komisi Bersih Affiliate (Rp)', 'Estimasi Komisi (IDR)', 'Total Komisi', 'Estimated Commission'])
+    
+    # Validasi jika kolom tidak ditemukan
+    if not SHP_COMM_ITEM_COL or not SHP_COMM_TOTAL_COL:
+        st.error("❌ Kolom 'Jumlah' atau 'Komisi' tidak ditemukan di file Shopee Commission. Pastikan file yang diupload benar.")
+        st.stop() # Menghentikan proses agar tidak error
     # -------------------------
-
     try:
         ad_dfs = [] 
 
