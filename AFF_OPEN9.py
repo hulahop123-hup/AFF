@@ -93,18 +93,21 @@ if (meta_files or tiktok_files) and click_files and commission_files:
     
     st.sidebar.success("Semua file berhasil dimuat & digabungkan!")
 
-    # --- KONFIGURASI KOLOM SHOPEE ---
-    # Menggunakan find_column agar kebal terhadap perubahan nama kolom dari Shopee
-    SHP_CLICK_TAG_COL = find_column(clicks, ['Tag_link', 'Tag Link', 'Sub ID', 'Sub_id'])
-    SHP_COMM_TAG_COL = find_column(commission, ['Tag_link1', 'Tag Link', 'Sub ID', 'Sub_id', 'Tag_link'])
-    SHP_COMM_ITEM_COL = find_column(commission, ['Jumlah', 'Pesanan', 'Orders', 'Item Terjual', 'Jumlah Pesanan'])
-    SHP_COMM_TOTAL_COL = find_column(commission, ['Komisi Bersih Affiliate (Rp)', 'Estimasi Komisi (IDR)', 'Total Komisi', 'Estimated Commission'])
-    
-    # Validasi jika kolom tidak ditemukan
-    if not SHP_COMM_ITEM_COL or not SHP_COMM_TOTAL_COL:
-        st.error("❌ Kolom 'Jumlah' atau 'Komisi' tidak ditemukan di file Shopee Commission. Pastikan file yang diupload benar.")
-        st.stop() # Menghentikan proses agar tidak error
-    # -------------------------
+    # --- KONFIGURASI KOLOM SHOPEE (OTOMATIS & DINAMIS) ---
+    SHP_CLICK_TAG_COL = find_column(clicks, ['Tag_link', 'Tag Link', 'Sub ID', 'Sub_id', 'Tag_link1'])
+    SHP_COMM_TAG_COL = find_column(commission, ['Tag_link1', 'Tag_link', 'Tag Link', 'Sub ID', 'Sub_id'])
+    SHP_COMM_ITEM_COL = find_column(commission, ['Jumlah', 'Pesanan', 'Orders', 'Item Terjual', 'Jumlah Pesanan', 'Qty', 'Jumlah Produk'])
+    SHP_COMM_TOTAL_COL = find_column(commission, ['Komisi Bersih Affiliate (Rp)', 'Estimasi Komisi (IDR)', 'Total Komisi', 'Estimated Commission', 'Komisi Bersih', 'Komisi (Rp)'])
+    # -----------------------------------------------------
+
+    if not SHP_CLICK_TAG_COL:
+        st.error("❌ Kolom tag/Sub ID tidak ditemukan pada file Shopee Click Report. Periksa header CSV Anda.")
+        st.stop()
+
+    if not SHP_COMM_TAG_COL or not SHP_COMM_ITEM_COL or not SHP_COMM_TOTAL_COL:
+        st.error("❌ Kolom penting (Tag Link, Jumlah Pesanan, atau Komisi) tidak ditemukan pada file Shopee Commission. Periksa header CSV Anda.")
+        st.stop()
+
     try:
         ad_dfs = [] 
 
@@ -146,7 +149,6 @@ if (meta_files or tiktok_files) and click_files and commission_files:
         if tiktok_files:
             tiktok = read_multiple_files(tiktok_files)
                 
-            # PERBAIKAN: Deteksi kombinasi pintar untuk mengatasi beda format 'Nama Iklan' vs 'Nama Grup Iklan'
             camp_cols = [c for c in tiktok.columns if c.strip().lower() in ['nama iklan', 'nama grup iklan', 'ad group name', 'ad name', 'campaign name', 'nama kampanye']]
             if camp_cols:
                 tiktok['NAMA_KAMPANYE_GABUNGAN'] = tiktok[camp_cols[0]]
