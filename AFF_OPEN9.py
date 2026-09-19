@@ -96,7 +96,7 @@ if (meta_files or tiktok_files) and click_files and commission_files:
     # --- KONFIGURASI KOLOM SHOPEE ---
     SHP_CLICK_TAG_COL = 'Tag_link'
     SHP_COMM_TAG_COL = 'Tag_link1'
-    SHP_COMM_ITEM_COL = 'Jumlah'
+    SHP_COMM_ITEM_COL = 'Pesanan'
     SHP_COMM_TOTAL_COL = 'Komisi Bersih Affiliate (Rp)'
     # -------------------------
 
